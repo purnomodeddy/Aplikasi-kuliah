@@ -17,10 +17,9 @@
         .form-group input:focus { outline: none; border-color: #2563EB; }
         .btn { width: 100%; padding: 12px; background: #2563EB; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .btn:hover { background: #1E40AF; }
-        .error { color: red; font-size: 12px; margin-top: 10px; text-align: center; }
-        .debug { background: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin-top: 20px; font-size: 11px; color: #333; max-height: 150px; overflow-y: auto; font-family: monospace; }
+        .msg { color: red; font-size: 12px; margin-top: 10px; text-align: center; }
+        .log { background: #fff3cd; border: 1px solid #ffc107; padding: 10px; margin-top: 20px; font-size: 11px; color: #333; max-height: 150px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; word-break: break-all; }
         .dashboard { display: none; padding: 30px; }
-        .dashboard.active { display: block; }
         .navbar { background: #2563EB; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; }
         .navbar h1 { font-size: 20px; }
         .navbar button { background: rgba(255,255,255,0.3); color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
@@ -42,8 +41,8 @@
             <input type="password" id="password" value="Deddyp84">
         </div>
         <button class="btn" id="loginBtn" type="button">Login</button>
-        <div class="error" id="error"></div>
-        <div class="debug" id="debug"></div>
+        <div class="msg" id="error"></div>
+        <div class="log" id="debug"></div>
     </div>
 </div>
 
@@ -53,13 +52,12 @@
         <button type="button" onclick="doLogout()">Logout</button>
     </div>
     <h2 id="userDisplay" style="margin: 30px 0;"></h2>
-    <p style="color: #666;">Login berhasil! Aplikasi Anda siap digunakan.</p>
+    <p style="color: #666;">Login berhasil! Aplikasi siap digunakan.</p>
 </div>
 
 </div>
 
 <script>
-// CONFIG
 const SUPABASE_URL = 'https://kqgojxzszljnsiblsnsc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WR_6SHV9Ix9ruyg5mingRA_7RZ9VYPJLvYXLrqmqBT4WdpS0GjJG2D8SAyMx4nfJvK5dqc2qYJvqx56bGJYpT7JJ1wMkK6eJaWx6wz8vvM4yYJrQ3Z6Q8K8yJPK3vhXvXzf5nF6H9kR7vKzqQ6wqJgX8';
 
@@ -70,86 +68,74 @@ let currentUser = null;
 function log(msg) {
     debugLog.push('[' + new Date().toLocaleTimeString() + '] ' + msg);
     document.getElementById('debug').innerHTML = debugLog.join('<br>');
-    console.log(msg);
 }
 
-function initSupabase() {
+function init() {
+    log('Init started');
+    
+    if (!window.supabase) {
+        log('ERROR: Supabase library not loaded');
+        document.getElementById('error').textContent = 'Library error - refresh page';
+        return false;
+    }
+    
     try {
-        log('Starting Supabase init...');
-        if (!window.supabase) {
-            log('ERROR: window.supabase is undefined!');
-            return false;
-        }
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        log('Supabase initialized OK');
+        log('Supabase OK');
         return true;
     } catch (e) {
-        log('ERROR init: ' + e.message);
+        log('ERROR: ' + e.message);
+        document.getElementById('error').textContent = 'Init error: ' + e.message;
         return false;
     }
 }
 
 function doLogin() {
-    log('doLogin() called');
+    log('Login clicked');
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const errorDiv = document.getElementById('error');
     
-    log('Email: ' + email);
-    
     if (!supabase) {
-        log('ERROR: supabase not initialized');
-        errorDiv.textContent = 'Error: Supabase not initialized';
+        log('ERROR: Supabase null');
+        errorDiv.textContent = 'Not initialized';
         return;
     }
     
-    log('Calling signInWithPassword...');
+    log('SignIn: ' + email);
     
     supabase.auth.signInWithPassword({email, password})
         .then(function(result) {
-            log('SignIn response received');
+            log('Response OK');
             if (result.error) {
-                log('SignIn error: ' + result.error.message);
-                errorDiv.textContent = 'Login failed: ' + result.error.message;
-                return;
+                log('Error: ' + result.error.message);
+                errorDiv.textContent = result.error.message;
+            } else {
+                log('Success!');
+                currentUser = result.data.user;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                document.getElementById('userDisplay').textContent = 'Welcome, ' + currentUser.email;
             }
-            log('Login success! User: ' + result.data.user.email);
-            currentUser = result.data.user;
-            showDashboard();
         })
         .catch(function(e) {
             log('Exception: ' + e.message);
-            errorDiv.textContent = 'Error: ' + e.message;
+            errorDiv.textContent = e.message;
         });
-}
-
-function showDashboard() {
-    log('Showing dashboard...');
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('dashboard').classList.add('active');
-    document.getElementById('userDisplay').textContent = 'Selamat datang, ' + currentUser.email;
 }
 
 function doLogout() {
     supabase.auth.signOut();
     currentUser = null;
     document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('dashboard').classList.remove('active');
+    document.getElementById('dashboard').style.display = 'none';
 }
 
-document.getElementById('loginBtn').addEventListener('click', function() {
-    log('Login button clicked (addEventListener)');
-    doLogin();
-});
+document.getElementById('loginBtn').addEventListener('click', doLogin);
 
-window.addEventListener('load', function() {
-    log('Page loaded, initializing...');
-    if (initSupabase()) {
-        log('App ready');
-    }
-});
+window.addEventListener('load', init);
 
-log('Script running');
+log('Script loaded');
 </script>
 
 </body>
