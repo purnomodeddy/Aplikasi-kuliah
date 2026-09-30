@@ -17,11 +17,13 @@
         .form-group input:focus { outline: none; border-color: #2563EB; }
         .btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #2563EB, #1E40AF); color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; }
         .btn:hover { opacity: 0.9; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .toggle-auth { text-align: center; margin-top: 20px; font-size: 14px; color: #666; }
         .toggle-auth a { color: #2563EB; cursor: pointer; font-weight: 600; text-decoration: none; }
         .toggle-auth a:hover { text-decoration: underline; }
         .error-msg { color: #EF4444; font-size: 14px; margin-top: 10px; text-align: center; }
         .success-msg { color: #10B981; font-size: 14px; margin-top: 10px; text-align: center; }
+        .debug-log { background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; padding: 10px; margin-top: 20px; font-size: 12px; color: #856404; max-height: 200px; overflow-y: auto; font-family: monospace; }
         .dashboard { display: none; padding: 30px; background: #f5f5f5; min-height: 100vh; }
         .dashboard.active { display: block; }
         .navbar { background: linear-gradient(135deg, #2563EB, #1E40AF); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; }
@@ -46,6 +48,7 @@
     </style>
 </head>
 <body>
+
 <div id="app">
     <div id="loginScreen" class="login-screen">
         <div class="login-box">
@@ -58,8 +61,9 @@
                 <label>Password:</label>
                 <input type="password" id="loginPassword" value="Deddyp84">
             </div>
-            <button class="btn" onclick="doLogin()">Login</button>
+            <button class="btn" id="loginBtn" onclick="doLogin()">Login</button>
             <div class="error-msg" id="loginError"></div>
+            <div class="debug-log" id="debugLog" style="display: none;"></div>
             <div class="toggle-auth">
                 Belum punya akun? <a onclick="showRegister()">Daftar di sini</a>
             </div>
@@ -81,7 +85,7 @@
                 <label>Konfirmasi Password:</label>
                 <input type="password" id="registerConfirm">
             </div>
-            <button class="btn" onclick="doRegister()">Daftar</button>
+            <button class="btn" id="registerBtn" onclick="doRegister()">Daftar</button>
             <div class="error-msg" id="registerError"></div>
             <div class="success-msg" id="registerSuccess"></div>
             <div class="toggle-auth">
@@ -92,15 +96,16 @@
 
     <div id="dashboard" class="dashboard">
         <div class="navbar">
-            <h1>📚 Aplikasi Kuliah STIT INSIDA</h1>
+            <h1>馃摎 Aplikasi Kuliah STIT INSIDA</h1>
             <div>
                 <span id="userEmail"></span>
                 <button onclick="doLogout()" style="margin-left: 15px;">Logout</button>
             </div>
         </div>
+
         <div class="dashboard-content">
             <div class="welcome">
-                <h2>Selamat Datang! 👋</h2>
+                <h2>Selamat Datang! 馃憢</h2>
                 <p>Kelola tugas, dokumentasi, dan kegiatan kuliah Anda di sini.</p>
             </div>
 
@@ -115,7 +120,7 @@
 
     <div id="semesterModal" class="modal">
         <div class="modal-content">
-            <span class="modal-close" onclick="closeModal('semesterModal')">×</span>
+            <span class="modal-close" onclick="closeModal('semesterModal')">脳</span>
             <h3>Tambah Semester</h3>
             <div class="form-group">
                 <label>Nomor Semester:</label>
@@ -131,7 +136,7 @@
 
     <div id="mkModal" class="modal">
         <div class="modal-content">
-            <span class="modal-close" onclick="closeModal('mkModal')">×</span>
+            <span class="modal-close" onclick="closeModal('mkModal')">脳</span>
             <h3>Tambah Mata Kuliah</h3>
             <div class="form-group">
                 <label>Nama Mata Kuliah:</label>
@@ -151,26 +156,59 @@
 </div>
 
 <script>
+// ERROR LOGGING UNTUK DEBUG
+const debugLog = [];
+function addDebugLog(msg) {
+    debugLog.push(new Date().toLocaleTimeString() + ': ' + msg);
+    const debugDiv = document.getElementById('debugLog');
+    debugDiv.innerHTML = debugLog.join('<br>');
+    debugDiv.style.display = 'block';
+    console.log(msg);
+}
+
+// SUPABASE CONFIG
 const SUPABASE_URL = 'https://kqgojxzszljnsiblsnsc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WR_6SHV9Ix9ruyg5mingRA_7RZ9VYPJLvYXLrqmqBT4WdpS0GjJG2D8SAyMx4nfJvK5dqc2qYJvqx56bGJYpT7JJ1wMkK6eJaWx6wz8vvM4yYJrQ3Z6Q8K8yJPK3vhXvXzf5nF6H9kR7vKzqQ6wqJgX8';
-const { createClient } = window.supabase;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+addDebugLog('Supabase URL: ' + SUPABASE_URL);
+addDebugLog('Supabase Key: ' + SUPABASE_KEY.substring(0, 20) + '...');
+
+let supabase;
 let currentUser = null;
 let currentSemesterId = null;
 let semesters = [];
+
+// INIT SUPABASE
+try {
+    const { createClient } = window.supabase;
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    addDebugLog('鉁� Supabase initialized');
+} catch (error) {
+    addDebugLog('鉂� Supabase init error: ' + error.message);
+}
 
 async function doLogin() {
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
+    
     errorDiv.textContent = '';
+    addDebugLog('馃攼 Login attempt: ' + email);
+    
     try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        
+        if (error) {
+            addDebugLog('鉂� Login error: ' + error.message);
+            throw error;
+        }
+        
+        addDebugLog('鉁� Login success!');
         currentUser = data.user;
         showDashboard();
     } catch (error) {
         errorDiv.textContent = 'Login gagal: ' + error.message;
+        addDebugLog('鉂� Exception: ' + error.message);
     }
 }
 
@@ -180,15 +218,19 @@ async function doRegister() {
     const confirm = document.getElementById('registerConfirm').value;
     const errorDiv = document.getElementById('registerError');
     const successDiv = document.getElementById('registerSuccess');
+    
     errorDiv.textContent = '';
     successDiv.textContent = '';
+    
     if (password !== confirm) {
         errorDiv.textContent = 'Password tidak cocok';
         return;
     }
+    
     try {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        
         successDiv.textContent = 'Daftar berhasil! Silakan login.';
         setTimeout(() => showLogin(), 2000);
     } catch (error) {
@@ -300,16 +342,22 @@ async function saveMataKuliah() {
 }
 
 async function checkAuth() {
+    addDebugLog('馃攳 Checking auth...');
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+        addDebugLog('鉁� User logged in: ' + user.email);
         currentUser = user;
         showDashboard();
     } else {
+        addDebugLog('鉂� No user logged in');
         showLogin();
     }
 }
 
+// START
+addDebugLog('馃殌 App starting...');
 checkAuth();
 </script>
+
 </body>
 </html>
